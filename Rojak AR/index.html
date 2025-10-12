@@ -11,19 +11,40 @@
     <a-scene
       embedded
       arjs
-      renderer="colorManagement: true; exposure: 4.5; toneMapping: ACESFilmic; physicallyCorrectLights: true; antialias: true">
+      renderer="colorManagement: true; exposure: 6.5; toneMapping: ACESFilmic; physicallyCorrectLights: true; antialias: true">
       
-      <!-- 🌞 Bright Environment -->
-      <a-entity environment="preset: goldmine; lighting: bright; ground: none;"></a-entity>
+  <!-- 🌞 MAX BRIGHT MODE -->
+  <!-- Ambient light fills all dark spots -->
+  <a-light type="ambient" color="#ffffff" intensity="12"></a-light>
 
-      <!-- 💡 Mega Bright Lighting -->
-      <a-light type="ambient" color="#ffffff" intensity="6"></a-light>
-      <a-light type="directional" color="#fff9e3" position="2 6 3" intensity="8" castShadow="true"></a-light>
-      <a-light type="hemisphere" color="#ffffff" groundColor="#aaaaaa" intensity="4"></a-light>
-      <a-light type="point" color="#ffffff" intensity="6" distance="30" position="0 2 2"></a-light>
+  <!-- Overhead soft sunlight -->
+  <a-light type="directional" color="#fff6da" position="0 10 0" intensity="12" castShadow="true"></a-light>
 
-      <!-- 🔦 Spotlight following camera -->
-      <a-entity id="camLight" light="type: spot; color: #ffffff; intensity: 8; angle: 60; penumbra: 0.5; distance: 25;"></a-entity>
+  <!-- SUPER STRONG bottom bounce -->
+  <a-light type="directional" color="#ffffff" position="0 -8 0" intensity="10"></a-light>
+
+  <!-- 360° bright fill from all sides -->
+  <a-light type="directional" color="#ffffff" position="10 4 0" intensity="8"></a-light>
+  <a-light type="directional" color="#ffffff" position="-10 4 0" intensity="8"></a-light>
+  <a-light type="directional" color="#ffffff" position="0 4 10" intensity="8"></a-light>
+  <a-light type="directional" color="#ffffff" position="0 4 -10" intensity="8"></a-light>
+
+  <!-- Hemisphere glow – simulates global light bounce -->
+  <a-light type="hemisphere" color="#ffffff" groundColor="#f5f5f5" intensity="10"></a-light>
+
+  <!-- 🌈 Light dome (soft surrounding glow) -->
+  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 5 5"></a-entity>
+  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="-5 2 -5"></a-entity>
+  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="5 2 -5"></a-entity>
+  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 -2 0"></a-entity>
+
+  <!-- ✨ Extra fake glow near models -->
+  <a-entity light="type: point; color: #fffbe8; intensity: 6; distance: 15;" position="0 1 0"></a-entity>
+
+  <!-- 🔦 Camera spotlight (dynamic follow) -->
+  <a-entity id="camLight"
+            light="type: spot; color: #ffffff; intensity: 12; angle: 75; penumbra: 0.7; distance: 30;">
+  </a-entity>
 
       <!-- 🧂 Ingredient markers -->
       <a-marker id="rice" type="pattern" url="./assets/markers/nasi.patt">
@@ -75,79 +96,230 @@
     </a-scene>
 
     <script>
-      const markers = { rice: false, sambal: false, ikan: false, daun: false };
-      const nasiLemakModel = document.getElementById('nasiLemakModel');
-      const ingredientModels = [
-        document.getElementById('riceModel'),
-        document.getElementById('sambalModel'),
-        document.getElementById('ikanModel'),
-        document.getElementById('daunModel')
-      ];
-      const camLight = document.getElementById('camLight');
-      const cameraRig = document.getElementById('cameraRig');
-
-      // 🔦 Spotlight follows camera
-      cameraRig.addEventListener('componentchanged', e => {
-        if (e.detail.name === 'position') {
-          const pos = cameraRig.object3D.position;
-          camLight.object3D.position.set(pos.x, pos.y, pos.z);
-        }
-      });
-
-      // 🔍 Marker tracking
-      Object.keys(markers).forEach(id => {
-        const marker = document.querySelector(`#${id}`);
-        marker.addEventListener('markerFound', () => {
-          markers[id] = true;
-          checkCombo();
+        const markers = { rice: false, sambal: false, ikan: false, daun: false };
+        const nasiLemakModel = document.getElementById('nasiLemakModel');
+        const ingredientModels = [
+          document.getElementById('riceModel'),
+          document.getElementById('sambalModel'),
+          document.getElementById('ikanModel'),
+          document.getElementById('daunModel')
+        ];
+        const camLight = document.getElementById('camLight');
+        const cameraRig = document.getElementById('cameraRig');
+      
+        // 🔦 Spotlight follows camera
+        cameraRig.addEventListener('componentchanged', e => {
+          if (e.detail.name === 'position') {
+            const pos = cameraRig.object3D.position;
+            camLight.object3D.position.set(pos.x, pos.y, pos.z);
+          }
         });
-        marker.addEventListener('markerLost', () => {
-          markers[id] = false;
-          checkCombo();
-        });
-      });
-
-      // 🧠 Show combined model when all visible
-      function checkCombo() {
-        const allVisible = Object.values(markers).every(v => v);
-        nasiLemakModel.setAttribute('visible', allVisible);
-        ingredientModels.forEach(model => model.setAttribute('visible', !allVisible));
-        if (allVisible) {
-          updateCenterPosition();
-          glowEffect();
-        }
-      }
-
-      // 🧭 Center it properly
-      function updateCenterPosition() {
-        const positions = [];
+      
+        // 🔍 Marker tracking
         Object.keys(markers).forEach(id => {
           const marker = document.querySelector(`#${id}`);
-          const pos = marker.object3D.position;
-          positions.push({ x: pos.x, y: pos.y, z: pos.z });
+          marker.addEventListener('markerFound', () => {
+            markers[id] = true;
+            checkCombo();
+          });
+          marker.addEventListener('markerLost', () => {
+            markers[id] = false;
+            checkCombo();
+          });
         });
-        if (positions.length === 0) return;
-        const avgX = positions.reduce((s, p) => s + p.x, 0) / positions.length;
-        const avgY = positions.reduce((s, p) => s + p.y, 0) / positions.length;
-        const avgZ = positions.reduce((s, p) => s + p.z, 0) / positions.length;
-        nasiLemakModel.object3D.position.set(avgX, avgY + 0.3, avgZ);
-      }
+      
+        // 🧠 Show combined model when all visible
 
-      // ✨ Glow shimmer
-      function glowEffect() {
-        let glow = 3;
-        let up = true;
-        const interval = setInterval(() => {
-          nasiLemakModel.setAttribute('material', `emissive: #ffffff; emissiveIntensity: ${glow.toFixed(1)}`);
-          if (up) glow += 0.2; else glow -= 0.2;
-          if (glow >= 6) up = false;
-          if (glow <= 3) {
-            up = true;
-            clearInterval(interval);
-            nasiLemakModel.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 3;');
-          }
-        }, 100);
+function checkCombo() {
+  const allVisible = Object.values(markers).every(v => v);
+  nasiLemakModel.setAttribute('visible', allVisible);
+  ingredientModels.forEach(model => model.setAttribute('visible', !allVisible));
+
+  // reset zoom + rotation every time a new marker combo changes
+  resetAllScales();
+  resetAllRotations();
+
+  if (allVisible) {
+    updateCenterPosition();
+    glowEffect();
+  }
+}
+
+
+      
+        // 🧭 Center it properly
+        function updateCenterPosition() {
+          const positions = [];
+          Object.keys(markers).forEach(id => {
+            const marker = document.querySelector(`#${id}`);
+            const pos = marker.object3D.position;
+            positions.push({ x: pos.x, y: pos.y, z: pos.z });
+          });
+          if (positions.length === 0) return;
+          const avgX = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+          const avgY = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+          const avgZ = positions.reduce((s, p) => s + p.z, 0) / positions.length;
+          nasiLemakModel.object3D.position.set(avgX, avgY + 0.3, avgZ);
+        }
+      
+        // ✨ Glow shimmer
+        function glowEffect() {
+          let glow = 3;
+          let up = true;
+          const interval = setInterval(() => {
+            nasiLemakModel.setAttribute('material', `emissive: #ffffff; emissiveIntensity: ${glow.toFixed(1)}`);
+            if (up) glow += 0.2; else glow -= 0.2;
+            if (glow >= 6) up = false;
+            if (glow <= 3) {
+              up = true;
+              clearInterval(interval);
+              nasiLemakModel.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 3;');
+            }
+          }, 100);
+        }
+      
+// 👆 Touch Rotation for ALL models (Free 3D rotation)
+let isTouching = false;
+let lastX = 0, lastY = 0;
+let rotationData = new Map(); // store {id: {x, y}}
+
+document.addEventListener('touchstart', e => {
+  isTouching = true;
+  lastX = e.touches[0].clientX;
+  lastY = e.touches[0].clientY;
+});
+
+document.addEventListener('touchmove', e => {
+  if (!isTouching) return;
+
+  const deltaX = e.touches[0].clientX - lastX;
+  const deltaY = e.touches[0].clientY - lastY;
+  lastX = e.touches[0].clientX;
+  lastY = e.touches[0].clientY;
+
+  const allModels = [...ingredientModels, nasiLemakModel];
+  allModels.forEach(model => {
+    if (model.getAttribute('visible')) {
+      const id = model.getAttribute('id');
+      if (!rotationData.has(id)) rotationData.set(id, { x: 0, y: 0 });
+      const rot = rotationData.get(id);
+
+      rot.y += deltaX * 0.3; // rotate horizontally (Y-axis)
+      rot.x -= deltaY * 0.3; // rotate vertically (X-axis)
+      rotationData.set(id, rot);
+
+      model.object3D.rotation.x = THREE.MathUtils.degToRad(rot.x);
+      model.object3D.rotation.y = THREE.MathUtils.degToRad(rot.y);
+    }
+  });
+});
+
+document.addEventListener('touchend', () => {
+  isTouching = false;
+});
+
+// 📏 Pinch Zoom for ALL visible models (works for every .glb)
+let initialDistance = 0;
+let baseScale = new Map(); // store {id: {x,y,z}}
+
+// helper: ensure scale initialized
+function ensureBaseScale(model) {
+  const id = model.getAttribute('id');
+  if (!baseScale.has(id)) {
+    const s = model.getAttribute('scale');
+    baseScale.set(id, {
+      x: parseFloat(s.x || s.split(' ')[0]),
+      y: parseFloat(s.y || s.split(' ')[1]),
+      z: parseFloat(s.z || s.split(' ')[2])
+    });
+  }
+}
+
+// 🌀 Reset all model scales to their original default
+function resetAllScales() {
+  baseScale.clear(); // clear saved scale data
+
+  const defaults = {
+    riceModel: { x: 1, y: 1, z: 1 },
+    sambalModel: { x: 1, y: 1, z: 1 },
+    ikanModel: { x: 1, y: 1, z: 1 },
+    daunModel: { x: 1, y: 1, z: 1 },
+    nasiLemakModel: { x: 2, y: 2, z: 2 } // 🍛 different base scale
+  };
+
+  Object.keys(defaults).forEach(id => {
+    const model = document.getElementById(id);
+    model.setAttribute('scale', defaults[id]);
+  });
+}
+
+// 🧭 Reset all model rotations to their default (facing front)
+function resetAllRotations() {
+  rotationData.clear(); // clear stored rotation data
+
+  const defaults = {
+    riceModel: { x: 0, y: 0, z: 0 },
+    sambalModel: { x: 0, y: 0, z: 0 },
+    ikanModel: { x: 0, y: 0, z: 0 },
+    daunModel: { x: 0, y: 0, z: 0 },
+    nasiLemakModel: { x: 90, y: 0, z: 0 } // 🍛 top-view rotation
+  };
+
+  Object.keys(defaults).forEach(id => {
+    const model = document.getElementById(id);
+    const r = defaults[id];
+    model.object3D.rotation.set(
+      THREE.MathUtils.degToRad(r.x),
+      THREE.MathUtils.degToRad(r.y),
+      THREE.MathUtils.degToRad(r.z)
+    );
+  });
+}
+
+
+document.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    const allModels = [...ingredientModels, nasiLemakModel];
+
+    allModels.forEach(model => {
+      if (!model.getAttribute('visible')) return;
+
+      ensureBaseScale(model);
+
+      const id = model.getAttribute('id');
+      const base = baseScale.get(id);
+
+      if (initialDistance === 0) {
+        initialDistance = distance;
+      } else {
+        const scaleFactor = distance / initialDistance;
+
+        // clamp between 0.5x and 5x
+        const newScale = {
+          x: Math.min(Math.max(base.x * scaleFactor, 0.5), 5),
+          y: Math.min(Math.max(base.y * scaleFactor, 0.5), 5),
+          z: Math.min(Math.max(base.z * scaleFactor, 0.5), 5)
+        };
+
+        model.setAttribute('scale', newScale);
       }
-    </script>
+    });
+  }
+});
+
+document.addEventListener('touchend', e => {
+  if (e.touches.length < 2) initialDistance = 0;
+});
+
+
+
+      </script>
+      
+      
+
   </body>
 </html>

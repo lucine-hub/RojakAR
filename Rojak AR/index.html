@@ -5,12 +5,149 @@
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.min.js"></script>
   </head>
-  <body style="margin:0; overflow:hidden;">
-    <a-scene embedded arjs>
-      <a-marker preset="hiro">
-        <a-box position="0 0.5 0" material="color: yellow;"></a-box>
+
+  <body style="margin:0; overflow:hidden; background:#fff;">
+
+    <a-scene
+      embedded
+      arjs
+      renderer="colorManagement: true; exposure: 4.5; toneMapping: ACESFilmic; physicallyCorrectLights: true; antialias: true">
+      
+      <!-- 🌞 Bright Environment -->
+      <a-entity environment="preset: goldmine; lighting: bright; ground: none;"></a-entity>
+
+      <!-- 💡 Mega Bright Lighting -->
+      <a-light type="ambient" color="#ffffff" intensity="6"></a-light>
+      <a-light type="directional" color="#fff9e3" position="2 6 3" intensity="8" castShadow="true"></a-light>
+      <a-light type="hemisphere" color="#ffffff" groundColor="#aaaaaa" intensity="4"></a-light>
+      <a-light type="point" color="#ffffff" intensity="6" distance="30" position="0 2 2"></a-light>
+
+      <!-- 🔦 Spotlight following camera -->
+      <a-entity id="camLight" light="type: spot; color: #ffffff; intensity: 8; angle: 60; penumbra: 0.5; distance: 25;"></a-entity>
+
+      <!-- 🧂 Ingredient markers -->
+      <a-marker id="rice" type="pattern" url="./assets/markers/nasi.patt">
+        <a-entity id="riceModel"
+                  gltf-model="./assets/nasi.glb"
+                  scale="1 1 1"
+                  material="emissive: #ffffff; emissiveIntensity: 2.5;">
+        </a-entity>
       </a-marker>
-      <a-entity camera></a-entity>
+
+      <a-marker id="sambal" type="pattern" url="./assets/markers/sambal.patt">
+        <a-entity id="sambalModel"
+                  gltf-model="./assets/sambal.glb"
+                  scale="1 1 1"
+                  material="emissive: #ff9999; emissiveIntensity: 2.2;">
+        </a-entity>
+      </a-marker>
+
+      <a-marker id="ikan" type="pattern" url="./assets/markers/ikanbilis.patt">
+        <a-entity id="ikanModel"
+                  gltf-model="./assets/ikanbilis.glb"
+                  scale="1 1 1"
+                  material="emissive: #eeeeee; emissiveIntensity: 2.2;">
+        </a-entity>
+      </a-marker>
+
+      <a-marker id="daun" type="pattern" url="./assets/markers/daunpisang.patt">
+        <a-entity id="daunModel"
+                  gltf-model="./assets/daunpisang.glb"
+                  scale="1 1 1"
+                  material="emissive: #88ff88; emissiveIntensity: 2.4;">
+        </a-entity>
+      </a-marker>
+
+      <!-- 🍛 Nasi Lemak (Top View + Bright) -->
+      <a-entity
+        id="nasiLemakModel"
+        gltf-model="./assets/nasilemak.glb"
+        scale="2 2 2"
+        position="0 0.5 0"
+        rotation="90 0 0"
+        visible="false"
+        shadow="receive: true; cast: true"
+        material="emissive: #ffffff; emissiveIntensity: 3;">
+    </a-entity>
+    
+
+      <a-entity camera id="cameraRig"></a-entity>
     </a-scene>
+
+    <script>
+      const markers = { rice: false, sambal: false, ikan: false, daun: false };
+      const nasiLemakModel = document.getElementById('nasiLemakModel');
+      const ingredientModels = [
+        document.getElementById('riceModel'),
+        document.getElementById('sambalModel'),
+        document.getElementById('ikanModel'),
+        document.getElementById('daunModel')
+      ];
+      const camLight = document.getElementById('camLight');
+      const cameraRig = document.getElementById('cameraRig');
+
+      // 🔦 Spotlight follows camera
+      cameraRig.addEventListener('componentchanged', e => {
+        if (e.detail.name === 'position') {
+          const pos = cameraRig.object3D.position;
+          camLight.object3D.position.set(pos.x, pos.y, pos.z);
+        }
+      });
+
+      // 🔍 Marker tracking
+      Object.keys(markers).forEach(id => {
+        const marker = document.querySelector(`#${id}`);
+        marker.addEventListener('markerFound', () => {
+          markers[id] = true;
+          checkCombo();
+        });
+        marker.addEventListener('markerLost', () => {
+          markers[id] = false;
+          checkCombo();
+        });
+      });
+
+      // 🧠 Show combined model when all visible
+      function checkCombo() {
+        const allVisible = Object.values(markers).every(v => v);
+        nasiLemakModel.setAttribute('visible', allVisible);
+        ingredientModels.forEach(model => model.setAttribute('visible', !allVisible));
+        if (allVisible) {
+          updateCenterPosition();
+          glowEffect();
+        }
+      }
+
+      // 🧭 Center it properly
+      function updateCenterPosition() {
+        const positions = [];
+        Object.keys(markers).forEach(id => {
+          const marker = document.querySelector(`#${id}`);
+          const pos = marker.object3D.position;
+          positions.push({ x: pos.x, y: pos.y, z: pos.z });
+        });
+        if (positions.length === 0) return;
+        const avgX = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+        const avgY = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+        const avgZ = positions.reduce((s, p) => s + p.z, 0) / positions.length;
+        nasiLemakModel.object3D.position.set(avgX, avgY + 0.3, avgZ);
+      }
+
+      // ✨ Glow shimmer
+      function glowEffect() {
+        let glow = 3;
+        let up = true;
+        const interval = setInterval(() => {
+          nasiLemakModel.setAttribute('material', `emissive: #ffffff; emissiveIntensity: ${glow.toFixed(1)}`);
+          if (up) glow += 0.2; else glow -= 0.2;
+          if (glow >= 6) up = false;
+          if (glow <= 3) {
+            up = true;
+            clearInterval(interval);
+            nasiLemakModel.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 3;');
+          }
+        }, 100);
+      }
+    </script>
   </body>
 </html>

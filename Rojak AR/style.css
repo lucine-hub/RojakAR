@@ -1,16 +1,213 @@
 body {
-    text-align: center;
-    font-family: sans-serif;
-    background-color: #fff8e1;
-    color: #333;
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: #ffffff; /* keep light background */
+    color: #1c1c1c;
   }
-  button {
+  
+/* --- Header --- */
+.recipe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px; /* reduced from 20px 28px */
+  margin-bottom: 0; /* ensure no extra gap below header */
+}
+  
+  .recipe-header h1 {
+    font-size: 2rem;
+    color: #f9b233;
+    font-weight: 700;
+    margin: 0;
+  }
+  
+  .recipe-logo {
+    width: 110px;
+    height: auto;
+  }
+  
+
+/* --- Grid Layout --- */
+.recipe-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    padding: 0 20px 30px; /* removed top padding to bring grid closer to title */
+    justify-items: center;
+  }
+  
+  /* --- PNG Cards Only --- */
+  .figma-card {
+    max-width: 165px;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: high-quality;
+    transform: translateZ(0); /* helps Chrome avoid blurring on mobile scaling */
+  }
+  
+  
+
+  
+  /* --- Back Button --- */
+  .back-btn {
+    font-family: 'Righteous', sans-serif;
+    display: block;
     background: #f9b233;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
+    color: #fff;
+    font-weight: 600;
+    margin: 20px auto 40px;
+    padding: 14px 0;
+    width: 80%;
+    max-width: 350px;
     font-size: 18px;
+    border: none;
+    border-radius: 16px;
     cursor: pointer;
+    transition: background 0.2s ease;
   }
-  button:hover { background: #ffcc33; }
+  
+  .back-btn:hover {
+    background: #ffcc33;
+  }
+  
+  /* --- Responsive --- */
+  @media (max-width: 480px) {
+    .recipe-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+  
+    .figma-card {
+      max-width: 150px;
+    }
+  
+    .recipe-header h1 {
+      font-size: 1.7rem;
+    }
+  
+    .recipe-logo {
+      width: 90px;
+    }
+  }
+  
+  .recipe-screen {
+    font-family: 'Righteous', sans-serif;
+  }
+  
+  .menu-screen, .menu-screen h1, .menu-screen button {
+    font-family: 'Righteous', sans-serif;
+  }
+  
+  :root{
+    --yellow: #f6b334;      /* Start button */
+    --navy:   #0f1e4d;      /* Recipe button & title */
+    --ink:    #0d1223;
+    --bg1:    #ffffff;
+    --bg2:    #eef3ff;      /* subtle light tint */
+  }
+  
+  html, body { height: 100%; }
+  body { margin: 0; font-family: 'Righteous', sans-serif; }
+  
+  /* Fullscreen soft background with faint waves */
+  .menu-screen{
+    min-height: 100dvh;
+    background:
+      radial-gradient(60% 45% at 50% 15%, var(--bg2) 0%, var(--bg1) 60%),
+      radial-gradient(70% 55% at 50% 100%, #f7f5ff 0%, var(--bg1) 60%);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* very faint wavy overlay */
+  .menu-screen::before{
+    content: "";
+    position: absolute; inset: -20% -10% auto -10%;
+    height: 60%;
+    background:
+      linear-gradient(180deg, rgba(255,164,199,.25), rgba(148,187,233,.25));
+    filter: blur(28px);
+    opacity: .35;
+    pointer-events: none;
+  }
+  
+  /* Top-right logo */
+  .logo{
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 96px; height: auto;
+    object-fit: contain;
+  }
+  
+  .menu-container {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: clamp(24px, 4vh, 40px) 24px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(20px, 4vh, 40px); /* increased gap between image, title & buttons */
+  }
+  
+  
+  /* Bowl image with depth */
+  .main-image{
+    width: clamp(180px, 45vw, 260px);
+    height: auto;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,.15));
+    margin-top: clamp(24px, 6vh, 56px);
+  }
+  
+  /* Title */
+  h1{
+    margin: 8px 0 8px;
+    color: var(--navy);
+    letter-spacing: .06em;
+    font-size: clamp(28px, 4.6vh, 40px);
+    text-align: center;
+  }
+  
+  /* Buttons */
+  .btn{
+    width: min(88%, 340px);
+    padding: 14px 20px;
+    border: none;
+    border-radius: 16px;
+    font-family: inherit;
+    font-size: clamp(18px, 2.6vh, 24px);
+    letter-spacing: .02em;
+    color: #fff;
+    cursor: pointer;
+    box-shadow:
+      0 8px 0 rgba(0,0,0,.18),          /* hard drop for “raised” look */
+      0 12px 24px rgba(0,0,0,.12);      /* soft ambient */
+    transition: transform .06s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  
+  .btn:active{
+    transform: translateY(2px);
+    box-shadow:
+      0 6px 0 rgba(0,0,0,.22),
+      0 10px 18px rgba(0,0,0,.18);
+  }
+  
+  /* Color variants */
+  .btn.primary{
+    background: var(--yellow);
+    color: #fff;
+  }
+  
+  .btn.secondary{
+    background: var(--navy);
+    color: #fff;
+    margin-top: 8px;
+  }
+  
+  /* Small phones: give breathing room at bottom */
+  @media (max-width: 380px){
+    .menu-container{ padding-bottom: 56px; }
+  }
   

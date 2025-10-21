@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NasiLemakAnim — Play Animation (Bright Scene)</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        background: #0b1020;
+        overflow: hidden;
+        color: white;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      #playButton {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background: #00cc88;
+        color: #fff;
+        font-size: 16px;
+        cursor: pointer;
+        transition: transform 0.1s ease, background 0.3s;
+        z-index: 10;
+        box-shadow: 0 6px 18px rgba(0, 204, 136, 0.3);
+      }
+      #playButton:hover { background: #00ff99; transform: translateY(-1px) scale(1.04); }
+      #playButton:active { transform: translateY(0) scale(0.98); }
+      #loading {
+        position: absolute; inset: 0; display: grid; place-items: center;
+        font-size: 14px; color: #cfd6e6; pointer-events: none;
+        background: linear-gradient(180deg, rgba(16,24,38,0.6), rgba(16,24,38,0.8));
+      }
+      #progressBar { width: min(420px, 60vw); height: 4px; background: #2a3350; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+      #progressFill { height: 100%; width: 0%; background: #00e3a0; transition: width 0.2s ease; }
+    </style>
+  </head>
+  <body>
+    <button id="playButton">Play Animation</button>
+    <div id="loading">
+      <div>
+        <div style="text-align:center">Loading NasiLemakAnim.glb…</div>
+        <div id="progressBar"><div id="progressFill"></div></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+      import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+      import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+      // === Scene setup ===
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a2336); // brighter than 0x101826
+
+      const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(2.5, 1.5, 3);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      // Modern color management
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35; // a tasteful lift
+      document.body.appendChild(renderer.domElement);
+
+      // Controls
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // === Lighting: bright, studio-like ===
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambientLight);
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x404060, 1.2);
+      hemi.position.set(0, 3, 0);
+      scene.add(hemi);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 2.2);
+      dirLight.position.set(4, 8, 6);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.set(2048, 2048);
+      dirLight.shadow.bias = -0.0001; // reduce shadow acne
+      scene.add(dirLight);
+
+      // Soft fill from the opposite side
+      const fill = new THREE.DirectionalLight(0xffffff, 0.6);
+      fill.position.set(-6, 3, -4);
+      scene.add(fill);
+
+      // === Ground plane for context ===
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshStandardMaterial({ color: 0x3a4256, roughness: 0.95 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.001;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // === Subtle environment for specular lift ===
+      // Uses an equirectangular texture -> PMREM -> scene.environment
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/royal_esplanade_1k.jpg',
+        (tex) => {
+          tex.mapping = THREE.EquirectangularReflectionMapping;
+          const envRT = pmrem.fromEquirectangular(tex);
+          scene.environment = envRT.texture;
+          tex.dispose();
+        }
+      );
+
+      // === Load GLB ===
+      const loader = new GLTFLoader();
+      let mixer, actions;
+
+      const loadingOverlay = document.getElementById('loading');
+      const progressFill = document.getElementById('progressFill');
+
+      loader.load(
+        'NasiLemakAnim.glb',
+        (gltf) => {
+          const model = gltf.scene;
+          model.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+            }
+          });
+          scene.add(model);
+
+          // Animation setup
+          mixer = new THREE.AnimationMixer(model);
+          actions = gltf.animations.map((clip) => mixer.clipAction(clip));
+          if (actions.length > 0) {
+            actions[0].paused = true;
+          }
+
+          // Auto scale/fit camera to model bounds
+          const box = new THREE.Box3().setFromObject(model);
+          const diag = box.getSize(new THREE.Vector3()).length();
+          if (diag < 0.1) model.scale.setScalar(10);
+          if (diag > 50)  model.scale.setScalar(0.1);
+
+          const newBox = new THREE.Box3().setFromObject(model);
+          const center = newBox.getCenter(new THREE.Vector3());
+          const size = newBox.getSize(new THREE.Vector3());
+          const radius = size.length() * 0.5;
+
+          // Position camera at a sensible distance
+          const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov * 0.5));
+          camera.position.copy(center).add(new THREE.Vector3(dist * 0.25, dist * 0.15, dist * 0.25));
+          camera.near = Math.max(0.1, radius / 100);
+          camera.far = dist * 10;
+          camera.updateProjectionMatrix();
+
+          controls.target.copy(center);
+          controls.update();
+
+          // Hide loader
+          loadingOverlay.style.display = 'none';
+        },
+        // Progress
+        (xhr) => {
+          if (xhr.total) {
+            const p = (xhr.loaded / xhr.total) * 100;
+            progressFill.style.width = `${p.toFixed(0)}%`;
+          }
+        },
+        (error) => {
+          console.error('Error loading GLB:', error);
+          loadingOverlay.innerHTML = '<div style="text-align:center;color:#ffb4b4">Failed to load GLB. Check the file path/name.</div>';
+        }
+      );
+
+      // === Play button ===
+      const playButton = document.getElementById('playButton');
+      playButton.addEventListener('click', () => {
+        if (actions && actions.length > 0) {
+          const action = actions[0];
+          action.reset();
+          action.play();
+          action.paused = false;
+        }
+      });
+
+      // === Animate loop ===
+      const clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+        if (mixer) mixer.update(delta);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Responsive resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>

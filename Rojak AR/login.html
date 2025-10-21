@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login - Rojak AR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+  <script src="script.js"></script>
+</head>
+
+<body class="menu-screen">
+  <script>
+    if (localStorage.getItem('playerName')) {
+      window.location.href = 'index.html';
+    }
+  </script>
+
+  <img class="logo" src="assets/TTlogo.png" alt="Thriving Talents" />
+
+  <div class="menu-container" style="max-width:420px">
+    <img src="assets/rojak.png" class="main-image" alt="Rojak Bowl" />
+    <h1>Enter Your Name</h1>
+
+    <form id="name-form" style="width:min(88%,340px);display:flex;flex-direction:column;gap:12px">
+      <input id="playerName" type="text" placeholder="Your name" required minlength="1" maxlength="30"
+             style="padding:12px;border-radius:12px;border:1px solid #ddd;font-family:inherit;font-size:16px">
+      <button class="btn primary" type="submit">Next</button>
+      <p id="msg" style="min-height:20px;margin:0;text-align:center;font-size:14px"></p>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('name-form');
+    const input = document.getElementById('playerName');
+    const msg = document.getElementById('msg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name) { setMsg('Please enter a name.', true); return; }
+
+      setMsg('Saving...');
+      try {
+        const playerId = await savePlayerName(name);
+        localStorage.setItem('playerId', playerId);
+        localStorage.setItem('playerName', name);
+        setMsg('Saved! Loading menu...');
+        window.location.href = 'index.html';
+      } catch (err) {
+        setMsg(cleanFirebaseError(err), true);
+      }
+    });
+
+    function setMsg(text, isError=false){
+      msg.textContent = text;
+      msg.style.color = isError ? '#c62828' : '#0d572e';
+    }
+  </script>
+</body>
+</html>

@@ -4,20 +4,117 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rojak AR</title>
-
-  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="style.css" />
+  <style>
+    .userbar{
+      position: fixed; top: 12px; right: 12px; z-index: 9999;
+      display:flex; align-items:center; gap:8px;
+      background:#ffffffcc; padding:8px 12px; border-radius:12px;
+      box-shadow:0 4px 12px rgba(0,0,0,.12); backdrop-filter: blur(6px);
+      color:#0f1e4d; font-size:14px;
+    }
+    .trophy{
+      width:26px; height:26px; border-radius:8px; border:none; cursor:pointer;
+      background:#f9b233; color:#fff; font-weight:900; display:flex; align-items:center; justify-content:center;
+    }
+    .tooltip{
+      position:absolute; top:42px; right:0; width:280px; background:#fff; color:#0f1e4d;
+      border:1px solid #eee; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.16);
+      padding:10px; display:none;
+    }
+    .tooltip table{ width:100%; border-collapse:collapse; }
+    .tooltip th, .tooltip td{ padding:6px 8px; border-bottom:1px solid #f3f3f3; text-align:left; font-size:12px; }
+    .tooltip tr:last-child td{ border-bottom:none; }
+    .tooltip h4{ margin:0 0 8px; font-size:13px; color:#555; text-transform:uppercase; letter-spacing:.06em; }
+  </style>
+  <!-- Firebase (compat) just for score/leaderboard -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+  <script src="script.js"></script>
 </head>
+
 <body class="menu-screen">
-    <img class="logo" src="assets/TTlogo.png" alt="Thriving Talents" />
-    <div class="menu-container">
-      <img src="assets/rojak.png" class="main-image" alt="Rojak Bowl" />
-      <h1>ROJAK AR</h1>
-      <button class="btn primary" onclick="window.location.href='camera.html'">Start</button>
-      <button class="btn secondary" onclick="window.location.href='recipe.html'">Recipe</button>
+  <!-- Enforce first-login: without name, redirect -->
+  <script>
+    if (!localStorage.getItem('playerName')) {
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <!-- Top-right: Name · Score + trophy -->
+  <div class="userbar">
+    <span id="who">—</span>
+    <span id="myscore" class="pill"></span>
+    <button class="trophy" id="lbBtn" title="Leaderboard">🏆</button>
+    <div class="tooltip" id="lbTip">
+      <h4>Leaderboard (Top 5)</h4>
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Score</th></tr></thead>
+        <tbody id="lbRows"><tr><td colspan="3">Loading…</td></tr></tbody>
+      </table>
     </div>
-  </body>
-  
+  </div>
+
+  <!-- Logo & menu -->
+  <img class="logo" src="assets/TTlogo.png" alt="Thriving Talents" />
+  <div class="menu-container">
+    <img src="assets/rojak.png" class="main-image" alt="Rojak Bowl" />
+    <h1>ROJAK AR</h1>
+
+    <button class="btn primary" id="startBtn">Start</button>
+    <button class="btn secondary" onclick="window.location.href='recipe.html'">Recipe</button>
+    <button class="btn secondary" onclick="window.location.href='leaderboard.html'">Leaderboard</button>
+  </div>
+
+  <script>
+    // show name
+    const nm = localStorage.getItem('playerName') || 'Player';
+    document.getElementById('who').textContent = nm;
+
+    // fetch and show my score
+    getMyScore().then(sc => {
+      document.getElementById('myscore').textContent = `Score: ${Number(sc||0)}`;
+    }).catch(()=>{ document.getElementById('myscore').textContent = `Score: 0`; });
+
+    // Start
+    document.getElementById('startBtn').addEventListener('click', () => {
+      const name = localStorage.getItem('playerName');
+      if (name) window.location.href = 'camera.html';
+      else window.location.href = 'login.html';
+    });
+
+    // Hover tooltip for leaderboard
+    const btn  = document.getElementById('lbBtn');
+    const tip  = document.getElementById('lbTip');
+    const rows = document.getElementById('lbRows');
+
+    let hideTimer = null;
+    const showTip = () => { clearTimeout(hideTimer); tip.style.display = 'block'; };
+    const hideTip = () => { hideTimer = setTimeout(()=> tip.style.display = 'none', 150); };
+
+    btn.addEventListener('mouseenter', showTip);
+    tip.addEventListener('mouseenter', showTip);
+    btn.addEventListener('mouseleave', hideTip);
+    tip.addEventListener('mouseleave', hideTip);
+
+    // subscribe top 5
+    subscribeLeaderboard(5, (list) => {
+      rows.innerHTML = '';
+      if (!list.length) {
+        rows.innerHTML = '<tr><td colspan="3">No players yet.</td></tr>';
+        return;
+      }
+      list.slice(0,5).forEach((p, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(p.name)}</td><td>${p.score}</td>`;
+        rows.appendChild(tr);
+      });
+    });
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+  </script>
+</body>
 </html>

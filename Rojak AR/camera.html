@@ -1,327 +1,420 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>RojakAR</title>
+    <meta charset="utf-8" />
+    <title>RojakAR · Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- A-Frame + AR.js -->
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.min.js"></script>
+
+    <!-- Firebase (optional) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+    <script src="script.js"></script>
+
+    <style>
+      body { margin:0; overflow:hidden; background:#fff; }
+
+      /* HUD */
+      .hud {
+        position: fixed; top: 12px; right: 12px; z-index: 9999;
+        background: #ffffffcc; padding: 10px 12px; border-radius: 12px;
+        display: flex; gap: 10px; align-items: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15); backdrop-filter: blur(6px);
+        color: #0f1e4d; font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      .hud .sep { width:1px; height:14px; background:#cfd6ea; }
+      .hud .pill { background:#0f1e4d; color:#fff; border:none; border-radius:10px; padding:6px 10px; cursor:pointer; }
+
+      .items-wrap { position: relative; }
+      .items-tooltip {
+        position: absolute; right:0; top:110%;
+        min-width:220px; max-height:260px; overflow:auto;
+        background:#fff; border:1px solid #e6e9f5; border-radius:10px;
+        padding:8px; box-shadow: 0 8px 18px rgba(0,0,0,.12);
+        display:none; z-index:99999;
+      }
+      .item-row {
+        display:flex; justify-content:space-between; gap:10px;
+        padding:6px 4px; border-bottom:1px dashed #eef1fb;
+      }
+      .item-row:last-child { border-bottom:none; }
+      .item-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .muted { color:#6b7280; font-size:12px; }
+
+      /* Feedback chip */
+      .feedback {
+        position: fixed; left: 12px; bottom: 12px; z-index: 9999;
+        background:#0f1e4d; color:#fff; border-radius: 12px;
+        padding: 10px 12px; font: 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15); display:none;
+      }
+
+      .home-btn {
+        position: fixed; bottom: 16px; left: 16px; z-index: 9999;
+        background: #ffffffcc; padding: 10px 12px; border-radius: 12px;
+        text-decoration: none; color: #0f1e4d; font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15); backdrop-filter: blur(6px);
+      }
+
+      /* Scan progress */
+      .scan-ui {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+        z-index: 9999; width: min(82vw, 360px);
+      }
+      .scan-label {
+        font: 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: #0f1e4d; text-align: center; margin-bottom: 6px;
+      }
+      .scan-bar {
+        width: 100%; height: 10px; border-radius: 999px;
+        background: #e8ecff; overflow: hidden; border: 1px solid #d9e0ff;
+      }
+      .scan-fill {
+        height: 100%; width: 0%;
+        background: linear-gradient(90deg, #f9b233, #ffd267);
+        transition: width .12s linear;
+      }
+
+      /* Retry overlay */
+      #retryBox {
+        display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99999;
+        align-items:center; justify-content:center;
+      }
+      #retryCard {
+        background:#fff; padding:16px 18px; border-radius:12px;
+        box-shadow:0 8px 24px rgba(0,0,0,.25); width:min(86vw,360px);
+      }
+      #retryBtn {
+        background:#0f1e4d; color:#fff; border:none; padding:8px 12px; border-radius:10px; cursor:pointer;
+      }
+    </style>
   </head>
 
-  <body style="margin:0; overflow:hidden; background:#fff;">
+  <body>
+     <!-- Enforce login -->
+    <script>
+      if (!localStorage.getItem('playerName')) {
+        window.location.href = 'login.html';
+      }
+    </script>
 
+    <!-- HUD -->
+    <div class="hud">
+      <span id="hudName">Name: —</span>
+      <span class="sep"></span>
+      <span id="hudScore">Score: 0</span>
+      <span class="sep"></span>
+      <div class="items-wrap">
+        <button class="pill" id="itemsBtn" type="button">Items</button>
+        <div class="items-tooltip" id="itemsTip">
+          <div style="font-weight:700; margin:4px 4px 8px;">Collected</div>
+          <div id="itemsRows" class="muted" style="padding:6px 4px;">No items yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan UI -->
+    <div class="scan-ui" id="scanUI" style="display:none">
+      <div class="scan-label" id="scanLabel">Scanning…</div>
+      <div class="scan-bar"><div class="scan-fill" id="scanFill"></div></div>
+    </div>
+
+    <!-- Feedback chip -->
+    <div class="feedback" id="feedbackChip">Scanned</div>
+
+    <!-- Retry overlay -->
+    <div id="retryBox">
+      <div id="retryCard">
+        <div style="font:600 16px system-ui, -apple-system, Segoe UI, Roboto;">Scan timed out</div>
+        <div style="margin-top:6px; color:#4b5563; font:14px system-ui;">
+          Couldn’t keep the marker steady long enough. Please hold the card steady and try again.
+        </div>
+        <div style="display:flex; gap:10px; margin-top:12px; justify-content:flex-end;">
+          <button id="retryBtn">Try Again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AR Scene -->
     <a-scene
       embedded
       arjs
       renderer="colorManagement: true; exposure: 6.5; toneMapping: ACESFilmic; physicallyCorrectLights: true; antialias: true">
-      
-  <!-- 🌞 MAX BRIGHT MODE -->
-  <!-- Ambient light fills all dark spots -->
-  <a-light type="ambient" color="#ffffff" intensity="12"></a-light>
 
-  <!-- Overhead soft sunlight -->
-  <a-light type="directional" color="#fff6da" position="0 10 0" intensity="12" castShadow="true"></a-light>
+      <!-- Full lighting preserved -->
+      <a-light type="ambient" color="#ffffff" intensity="12"></a-light>
+      <a-light type="directional" color="#fff6da" position="0 10 0" intensity="12" castShadow="true"></a-light>
+      <a-light type="directional" color="#ffffff" position="0 -8 0" intensity="10"></a-light>
+      <a-light type="directional" color="#ffffff" position="10 4 0" intensity="8"></a-light>
+      <a-light type="directional" color="#ffffff" position="-10 4 0" intensity="8"></a-light>
+      <a-light type="directional" color="#ffffff" position="0 4 10" intensity="8"></a-light>
+      <a-light type="directional" color="#ffffff" position="0 4 -10" intensity="8"></a-light>
+      <a-light type="hemisphere" color="#ffffff" groundColor="#f5f5f5" intensity="10"></a-light>
+      <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 5 5"></a-entity>
+      <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="-5 2 -5"></a-entity>
+      <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="5 2 -5"></a-entity>
+      <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 -2 0"></a-entity>
+      <a-entity light="type: point; color: #fffbe8; intensity: 6; distance: 15;" position="0 1 0"></a-entity>
 
-  <!-- SUPER STRONG bottom bounce -->
-  <a-light type="directional" color="#ffffff" position="0 -8 0" intensity="10"></a-light>
+      <a-entity id="camLight" light="type: spot; color: #ffffff; intensity: 12; angle: 75; penumbra: 0.7; distance: 30;"></a-entity>
 
-  <!-- 360° bright fill from all sides -->
-  <a-light type="directional" color="#ffffff" position="10 4 0" intensity="8"></a-light>
-  <a-light type="directional" color="#ffffff" position="-10 4 0" intensity="8"></a-light>
-  <a-light type="directional" color="#ffffff" position="0 4 10" intensity="8"></a-light>
-  <a-light type="directional" color="#ffffff" position="0 4 -10" intensity="8"></a-light>
-
-  <!-- Hemisphere glow – simulates global light bounce -->
-  <a-light type="hemisphere" color="#ffffff" groundColor="#f5f5f5" intensity="10"></a-light>
-
-  <!-- 🌈 Light dome (soft surrounding glow) -->
-  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 5 5"></a-entity>
-  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="-5 2 -5"></a-entity>
-  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="5 2 -5"></a-entity>
-  <a-entity light="type: point; color: #ffffff; intensity: 8; distance: 30;" position="0 -2 0"></a-entity>
-
-  <!-- ✨ Extra fake glow near models -->
-  <a-entity light="type: point; color: #fffbe8; intensity: 6; distance: 15;" position="0 1 0"></a-entity>
-
-  <!-- 🔦 Camera spotlight (dynamic follow) -->
-  <a-entity id="camLight"
-            light="type: spot; color: #ffffff; intensity: 12; angle: 75; penumbra: 0.7; distance: 30;">
-  </a-entity>
-
-      <!-- 🧂 Ingredient markers -->
+      <!-- Markers -->
       <a-marker id="rice" type="pattern" url="./assets/markers/nasi.patt">
-        <a-entity id="riceModel"
-                  gltf-model="./assets/nasi.glb"
-                  scale="1 1 1"
-                  material="emissive: #ffffff; emissiveIntensity: 2.5;">
-        </a-entity>
+        <a-entity id="riceModel" gltf-model="./assets/nasi.glb" scale="1 1 1"></a-entity>
       </a-marker>
-
       <a-marker id="sambal" type="pattern" url="./assets/markers/sambal.patt">
-        <a-entity id="sambalModel"
-                  gltf-model="./assets/sambal.glb"
-                  scale="1 1 1"
-                  material="emissive: #ff9999; emissiveIntensity: 2.2;">
-        </a-entity>
+        <a-entity id="sambalModel" gltf-model="./assets/sambal.glb" scale="1 1 1"></a-entity>
       </a-marker>
-
       <a-marker id="ikan" type="pattern" url="./assets/markers/ikanbilis.patt">
-        <a-entity id="ikanModel"
-                  gltf-model="./assets/ikanbilis.glb"
-                  scale="1 1 1"
-                  material="emissive: #eeeeee; emissiveIntensity: 2.2;">
-        </a-entity>
+        <a-entity id="ikanModel" gltf-model="./assets/ikanbilis.glb" scale="1 1 1"></a-entity>
       </a-marker>
-
       <a-marker id="daun" type="pattern" url="./assets/markers/daunpisang.patt">
-        <a-entity id="daunModel"
-                  gltf-model="./assets/daunpisang.glb"
-                  scale="1 1 1"
-                  material="emissive: #88ff88; emissiveIntensity: 2.4;">
-        </a-entity>
+        <a-entity id="daunModel" gltf-model="./assets/daunpisang.glb" scale="1 1 1"></a-entity>
       </a-marker>
 
-      <!-- 🍛 Nasi Lemak (Top View + Bright) -->
-      <a-entity
-        id="nasiLemakModel"
+      <!-- Combined -->
+      <a-entity id="nasiLemakModel"
         gltf-model="./assets/nasilemak.glb"
         scale="2 2 2"
         position="0 0.5 0"
         rotation="90 0 0"
-        visible="false"
-        shadow="receive: true; cast: true"
-        material="emissive: #ffffff; emissiveIntensity: 3;">
-    </a-entity>
-    
+        visible="false"></a-entity>
 
       <a-entity camera id="cameraRig"></a-entity>
     </a-scene>
 
+    <a href="index.html" class="home-btn">Home</a>
+
     <script>
-        const markers = { rice: false, sambal: false, ikan: false, daun: false };
-        const nasiLemakModel = document.getElementById('nasiLemakModel');
-        const ingredientModels = [
-          document.getElementById('riceModel'),
-          document.getElementById('sambalModel'),
-          document.getElementById('ikanModel'),
-          document.getElementById('daunModel')
-        ];
-        const camLight = document.getElementById('camLight');
-        const cameraRig = document.getElementById('cameraRig');
-      
-        // 🔦 Spotlight follows camera
-        cameraRig.addEventListener('componentchanged', e => {
-          if (e.detail.name === 'position') {
-            const pos = cameraRig.object3D.position;
-            camLight.object3D.position.set(pos.x, pos.y, pos.z);
+      // HUD + score
+      const hudName  = document.getElementById('hudName');
+      const hudScore = document.getElementById('hudScore');
+      hudName.textContent = `Name: ${localStorage.getItem('playerName') || 'Player'}`;
+      getMyScore().then(s => hudScore.textContent = `Score: ${Number(s||0)}`);
+
+      // Items tooltip
+      const itemsBtn  = document.getElementById('itemsBtn');
+      const itemsTip  = document.getElementById('itemsTip');
+      const itemsRows = document.getElementById('itemsRows');
+      itemsBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        itemsTip.style.display = (itemsTip.style.display === 'block') ? 'none' : 'block';
+      });
+      document.addEventListener('click', () => { itemsTip.style.display = ''; });
+
+      function renderFound(found){
+        const L=[];
+        if(found.rice)   L.push({name:'Nasi', points:10});
+        if(found.sambal) L.push({name:'Sambal', points:10});
+        if(found.ikan)   L.push({name:'Ikan Bilis', points:10});
+        if(found.daun)   L.push({name:'Daun Pisang', points:10});
+        if(!L.length){ itemsRows.classList.add('muted'); itemsRows.textContent='No items yet.'; return; }
+        itemsRows.classList.remove('muted'); itemsRows.innerHTML='';
+        L.forEach(it => {
+          const row = document.createElement('div');
+          row.className='item-row';
+          row.innerHTML = `<span class="item-name">${it.name}</span><span>+${it.points}</span>`;
+          itemsRows.appendChild(row);
+        });
+      }
+      const offFoundListener = onFoundItems(renderFound);
+
+      // Feedback chip
+      const feedback = document.getElementById('feedbackChip');
+      function showFeedback(t){
+        feedback.textContent = t;
+        feedback.style.display = 'block';
+        clearTimeout(showFeedback._t);
+        showFeedback._t = setTimeout(()=>{ feedback.style.display='none'; }, 1200);
+      }
+
+      // Camera light follow
+      const camLight  = document.getElementById('camLight');
+      const cameraRig = document.getElementById('cameraRig');
+      cameraRig.addEventListener('componentchanged', e => {
+        if (e.detail.name === 'position') {
+          const pos = cameraRig.object3D.position;
+          camLight.object3D.position.set(pos.x, pos.y, pos.z);
+        }
+      });
+
+      // Marker state + debounce
+      const markers = { rice:false, sambal:false, ikan:false, daun:false };
+      const label   = { rice:'Nasi', sambal:'Sambal', ikan:'Ikan Bilis', daun:'Daun Pisang' };
+      const markerDebounce = {};
+      function setMarkerState(id, state) {
+        if (markerDebounce[id]) { clearTimeout(markerDebounce[id]); markerDebounce[id] = null; }
+        if (state) { markers[id] = true; ensureScanning(); }
+        else {
+          markerDebounce[id] = setTimeout(() => {
+            markers[id] = false; ensureScanning(); markerDebounce[id] = null;
+          }, 200);
+        }
+      }
+
+      // Models
+      const combined = document.getElementById('nasiLemakModel');
+      const parts = [
+        document.getElementById('riceModel'),
+        document.getElementById('sambalModel'),
+        document.getElementById('ikanModel'),
+        document.getElementById('daunModel')
+      ];
+
+      // Scan progress + retry
+      const HOLD_MS_ITEM  = 3000;
+      const HOLD_MS_COMBO = 3000;
+      const SCAN_TIMEOUT_MS = 5000;
+
+      const scanUI    = document.getElementById('scanUI');
+      const scanLabel = document.getElementById('scanLabel');
+      const scanFill  = document.getElementById('scanFill');
+
+      let scanTarget = null;   // 'rice' | 'sambal' | 'ikan' | 'daun' | 'combo' | null
+      let scanStart  = 0;
+      let scanRaf    = null;
+      let retryTimer = null;
+
+      const retryBox = document.getElementById('retryBox');
+      const retryBtn = document.getElementById('retryBtn');
+      retryBtn.addEventListener('click', () => {
+        retryBox.style.display = 'none';
+        scanTarget = null;
+        scanFill.style.width = '0%';
+        scanUI.style.display = 'none';
+        ensureScanning();
+      });
+
+      // Local claimed cache
+      const claimed = { rice:false, sambal:false, ikan:false, daun:false, combo:false };
+
+      function avgPos(){
+        const ids=['rice','sambal','ikan','daun'];
+        const pts=[];
+        ids.forEach(id=>{
+          if(markers[id]){
+            const p = document.getElementById(id).object3D.position;
+            pts.push({x:p.x,y:p.y,z:p.z});
           }
         });
-      
-        // 🔍 Marker tracking
-        Object.keys(markers).forEach(id => {
-          const marker = document.querySelector(`#${id}`);
-          marker.addEventListener('markerFound', () => {
-            markers[id] = true;
-            checkCombo();
-          });
-          marker.addEventListener('markerLost', () => {
-            markers[id] = false;
-            checkCombo();
-          });
-        });
-      
-        // 🧠 Show combined model when all visible
-
-function checkCombo() {
-  const allVisible = Object.values(markers).every(v => v);
-  nasiLemakModel.setAttribute('visible', allVisible);
-  ingredientModels.forEach(model => model.setAttribute('visible', !allVisible));
-
-  // reset zoom + rotation every time a new marker combo changes
-  resetAllScales();
-  resetAllRotations();
-
-  if (allVisible) {
-    updateCenterPosition();
-    glowEffect();
-  }
-}
-
-
-      
-        // 🧭 Center it properly
-        function updateCenterPosition() {
-          const positions = [];
-          Object.keys(markers).forEach(id => {
-            const marker = document.querySelector(`#${id}`);
-            const pos = marker.object3D.position;
-            positions.push({ x: pos.x, y: pos.y, z: pos.z });
-          });
-          if (positions.length === 0) return;
-          const avgX = positions.reduce((s, p) => s + p.x, 0) / positions.length;
-          const avgY = positions.reduce((s, p) => s + p.y, 0) / positions.length;
-          const avgZ = positions.reduce((s, p) => s + p.z, 0) / positions.length;
-          nasiLemakModel.object3D.position.set(avgX, avgY + 0.3, avgZ);
-        }
-      
-        // ✨ Glow shimmer
-        function glowEffect() {
-          let glow = 3;
-          let up = true;
-          const interval = setInterval(() => {
-            nasiLemakModel.setAttribute('material', `emissive: #ffffff; emissiveIntensity: ${glow.toFixed(1)}`);
-            if (up) glow += 0.2; else glow -= 0.2;
-            if (glow >= 6) up = false;
-            if (glow <= 3) {
-              up = true;
-              clearInterval(interval);
-              nasiLemakModel.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 3;');
-            }
-          }, 100);
-        }
-      
-// 👆 Touch Rotation for ALL models (Free 3D rotation)
-let isTouching = false;
-let lastX = 0, lastY = 0;
-let rotationData = new Map(); // store {id: {x, y}}
-
-document.addEventListener('touchstart', e => {
-  isTouching = true;
-  lastX = e.touches[0].clientX;
-  lastY = e.touches[0].clientY;
-});
-
-document.addEventListener('touchmove', e => {
-  if (!isTouching) return;
-
-  const deltaX = e.touches[0].clientX - lastX;
-  const deltaY = e.touches[0].clientY - lastY;
-  lastX = e.touches[0].clientX;
-  lastY = e.touches[0].clientY;
-
-  const allModels = [...ingredientModels, nasiLemakModel];
-  allModels.forEach(model => {
-    if (model.getAttribute('visible')) {
-      const id = model.getAttribute('id');
-      if (!rotationData.has(id)) rotationData.set(id, { x: 0, y: 0 });
-      const rot = rotationData.get(id);
-
-      rot.y += deltaX * 0.3; // rotate horizontally (Y-axis)
-      rot.x -= deltaY * 0.3; // rotate vertically (X-axis)
-      rotationData.set(id, rot);
-
-      model.object3D.rotation.x = THREE.MathUtils.degToRad(rot.x);
-      model.object3D.rotation.y = THREE.MathUtils.degToRad(rot.y);
-    }
-  });
-});
-
-document.addEventListener('touchend', () => {
-  isTouching = false;
-});
-
-// 📏 Pinch Zoom for ALL visible models (works for every .glb)
-let initialDistance = 0;
-let baseScale = new Map(); // store {id: {x,y,z}}
-
-// helper: ensure scale initialized
-function ensureBaseScale(model) {
-  const id = model.getAttribute('id');
-  if (!baseScale.has(id)) {
-    const s = model.getAttribute('scale');
-    baseScale.set(id, {
-      x: parseFloat(s.x || s.split(' ')[0]),
-      y: parseFloat(s.y || s.split(' ')[1]),
-      z: parseFloat(s.z || s.split(' ')[2])
-    });
-  }
-}
-
-// 🌀 Reset all model scales to their original default
-function resetAllScales() {
-  baseScale.clear(); // clear saved scale data
-
-  const defaults = {
-    riceModel: { x: 1, y: 1, z: 1 },
-    sambalModel: { x: 1, y: 1, z: 1 },
-    ikanModel: { x: 1, y: 1, z: 1 },
-    daunModel: { x: 1, y: 1, z: 1 },
-    nasiLemakModel: { x: 2, y: 2, z: 2 } // 🍛 different base scale
-  };
-
-  Object.keys(defaults).forEach(id => {
-    const model = document.getElementById(id);
-    model.setAttribute('scale', defaults[id]);
-  });
-}
-
-// 🧭 Reset all model rotations to their default (facing front)
-function resetAllRotations() {
-  rotationData.clear(); // clear stored rotation data
-
-  const defaults = {
-    riceModel: { x: 0, y: 0, z: 0 },
-    sambalModel: { x: 0, y: 0, z: 0 },
-    ikanModel: { x: 0, y: 0, z: 0 },
-    daunModel: { x: 0, y: 0, z: 0 },
-    nasiLemakModel: { x: 90, y: 0, z: 0 } // 🍛 top-view rotation
-  };
-
-  Object.keys(defaults).forEach(id => {
-    const model = document.getElementById(id);
-    const r = defaults[id];
-    model.object3D.rotation.set(
-      THREE.MathUtils.degToRad(r.x),
-      THREE.MathUtils.degToRad(r.y),
-      THREE.MathUtils.degToRad(r.z)
-    );
-  });
-}
-
-
-document.addEventListener('touchmove', e => {
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    const allModels = [...ingredientModels, nasiLemakModel];
-
-    allModels.forEach(model => {
-      if (!model.getAttribute('visible')) return;
-
-      ensureBaseScale(model);
-
-      const id = model.getAttribute('id');
-      const base = baseScale.get(id);
-
-      if (initialDistance === 0) {
-        initialDistance = distance;
-      } else {
-        const scaleFactor = distance / initialDistance;
-
-        // clamp between 0.5x and 5x
-        const newScale = {
-          x: Math.min(Math.max(base.x * scaleFactor, 0.5), 5),
-          y: Math.min(Math.max(base.y * scaleFactor, 0.5), 5),
-          z: Math.min(Math.max(base.z * scaleFactor, 0.5), 5)
-        };
-
-        model.setAttribute('scale', newScale);
+        if(!pts.length) return null;
+        const s=pts.reduce((a,p)=>({x:a.x+p.x,y:a.y+p.y,z:a.z+p.z}),{x:0,y:0,z:0});
+        return {x:s.x/pts.length, y:s.y/pts.length, z:s.z/pts.length};
       }
-    });
-  }
-});
+      function setComboVisible(on){
+        combined.setAttribute('visible', on);
+        parts.forEach(m => m && m.setAttribute('visible', !on));
+      }
 
-document.addEventListener('touchend', e => {
-  if (e.touches.length < 2) initialDistance = 0;
-});
+      function startScan(target){
+        scanTarget = target;
+        scanStart = performance.now();
+        scanUI.style.display = 'block';
+        scanLabel.textContent = (target==='combo')
+          ? 'Hold all four cards steady…'
+          : `Hold ${label[target]||target} steady…`;
 
+        if (retryTimer) { clearTimeout(retryTimer); }
+        retryTimer = setTimeout(() => {
+          if (scanTarget === target) {
+            scanTarget = null;
+            scanFill.style.width='0%';
+            scanUI.style.display='none';
+            retryBox.style.display = 'flex';
+          }
+        }, SCAN_TIMEOUT_MS);
 
+        if (scanRaf) cancelAnimationFrame(scanRaf);
+        const loop = (t)=>{
+          if(!scanTarget){ scanFill.style.width='0%'; scanUI.style.display='none'; return; }
+          const need = (scanTarget==='combo') ? HOLD_MS_COMBO : HOLD_MS_ITEM;
+          const ok   = (scanTarget==='combo')
+            ? (markers.rice && markers.sambal && markers.ikan && markers.daun)
+            : !!markers[scanTarget];
 
-      </script>
-      
-<a href="index.html" class="home-btn">🏠</a>
-      
+          if(!ok){
+            scanTarget = null;
+            scanFill.style.width='0%';
+            scanUI.style.display='none';
+            if (retryTimer) clearTimeout(retryTimer);
+            return;
+          }
 
+          const pct = Math.min(1, (t - scanStart) / need);
+          scanFill.style.width = (pct*100).toFixed(1) + '%';
+
+          if(pct >= 1){
+            const doneTarget = scanTarget;
+            scanTarget = null;
+            scanFill.style.width='0%';
+            scanUI.style.display='none';
+            if (retryTimer) clearTimeout(retryTimer);
+            claim(doneTarget);
+            return;
+          }
+          scanRaf = requestAnimationFrame(loop);
+        };
+        scanRaf = requestAnimationFrame(loop);
+      }
+
+      function ensureScanning(){
+        if (retryBox.style.display === 'flex') return; // wait for user action
+        // prefer combo first
+        if (markers.rice && markers.sambal && markers.ikan && markers.daun && !claimed.combo) {
+          if (scanTarget !== 'combo') startScan('combo');
+          return;
+        }
+        // items
+        const order = ['rice','sambal','ikan','daun'];
+        for (const id of order) {
+          if (markers[id] && !claimed[id]) {
+            if (scanTarget !== id) startScan(id);
+            return;
+          }
+        }
+      }
+
+      async function claim(target){
+        try{
+          if(target==='combo'){
+            if (claimed.combo) return;
+            claimed.combo = true;
+
+            //  combo reward = +20
+            await awardCombo(); // keep your DB logic here
+            const s = await getMyScore(); hudScore.textContent = `Score: ${Number(s||0)}`;
+
+            const a = avgPos();
+            if (a) combined.object3D.position.set(a.x, a.y + 0.3, a.z);
+            setComboVisible(true);
+            setTimeout(()=> setComboVisible(false), 5000);
+
+            showFeedback('Combo claimed: Nasi Lemak +20');
+            return;
+          }
+
+          // single item = +10
+          if (claimed[target]) return;
+          claimed[target] = true;
+
+          await awardFound(target); // your DB logic for +10
+          const s = await getMyScore(); hudScore.textContent = `Score: ${Number(s||0)}`;
+
+          showFeedback(`Item claimed: ${label[target]||target} +10`);
+        } catch(e){
+          // silent UI on error; your DB functions should be idempotent/guarded
+        }
+      }
+
+      // Marker wiring (debounced)
+      ['rice','sambal','ikan','daun'].forEach(id=>{
+        const mk = document.getElementById(id);
+        mk.addEventListener('markerFound', ()=> setMarkerState(id, true));
+        mk.addEventListener('markerLost',  ()=> setMarkerState(id, false));
+      });
+    </script>
   </body>
 </html>
-

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NasiLemakAnim — Play Animation (Bright Scene)</title>
+    <style>
+      body {
+        margin: 0;
+        background: #0b1020;
+        overflow: hidden;
+        color: white;
+        font-family: sans-serif;
+      }
+      #playButton {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        background: #00cc88;
+        color: #fff;
+        font-size: 16px;
+        cursor: pointer;
+        transition: transform 0.1s ease, background 0.3s;
+        z-index: 10;
+      }
+      #playButton:hover {
+        background: #00ff99;
+        transform: scale(1.05);
+      }
+    </style>
+  </head>
+  <body>
+    <button id="playButton">Play Animation</button>
+    <script type="module">
+      import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+      import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+      import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+      // Scene setup
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x101826);
+
+      const camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(2.5, 1.5, 3);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // === Lighting ===
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x404060, 1);
+      hemi.position.set(0, 2, 0);
+      scene.add(hemi);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(5, 10, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      scene.add(dirLight);
+
+      // Add a ground plane for context
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(10, 10),
+        new THREE.MeshStandardMaterial({ color: 0x222833, roughness: 1 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.001;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // === Load GLB ===
+      const loader = new GLTFLoader();
+      let mixer, actions;
+
+      loader.load(
+        'NasiLemakAnim.glb',
+        (gltf) => {
+          const model = gltf.scene;
+          model.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+            }
+          });
+          scene.add(model);
+
+          // Animation setup
+          mixer = new THREE.AnimationMixer(model);
+          actions = gltf.animations.map((clip) => mixer.clipAction(clip));
+          if (actions.length > 0) {
+            actions[0].paused = true;
+          }
+
+          // Auto-fit camera to model
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3()).length();
+          camera.position.set(center.x + size / 4, center.y + size / 6, center.z + size / 4);
+          controls.target.copy(center);
+          controls.update();
+        },
+        undefined,
+        (error) => {
+          console.error('Error loading GLB:', error);
+        }
+      );
+
+      // === Play button ===
+      const playButton = document.getElementById('playButton');
+      playButton.addEventListener('click', () => {
+        if (actions && actions.length > 0) {
+          const action = actions[0];
+          action.reset();
+          action.play();
+          action.paused = false;
+        }
+      });
+
+      // === Animate loop ===
+      const clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+        if (mixer) mixer.update(delta);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Responsive resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>

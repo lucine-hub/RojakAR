@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Leaderboard - Rojak AR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Righteous', sans-serif; background: #fff; color: #0f1e4d; margin:0; }
+    header { background: #f9b233; color:#fff; padding:14px; text-align:center; font-size:22px; }
+    main { max-width:600px; margin:20px auto; padding:0 16px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px 8px; border-bottom:1px solid #eee; }
+    th { text-transform:uppercase; font-size:13px; color:#666; text-align:left; }
+    tr.highlight { background:#fff5d8; font-weight:700; }
+    .rank { text-align:center; color:#f9b233; font-weight:700; }
+    .score { text-align:right; }
+    .home { display:block; text-align:center; margin:20px auto; background:#0f1e4d; color:#fff;
+            padding:10px 16px; border-radius:10px; text-decoration:none; width:fit-content; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+  <script src="script.js"></script>
+</head>
+<body>
+  <header>Leaderboard</header>
+  <main>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Name</th><th class="score">Score</th></tr>
+      </thead>
+      <tbody id="leaderRows"><tr><td colspan="3" style="text-align:center;color:#888;">Loading...</td></tr></tbody>
+    </table>
+    <a href="index.html" class="home">Home</a>
+  </main>
+
+  <script>
+    const tbody = document.getElementById('leaderRows');
+    const ref = db.ref('players');
+    const myId = localStorage.getItem('playerId');
+
+    ref.on('value', snap => {
+      const data = snap.val() || {};
+      const arr = Object.entries(data).map(([id,v]) => ({
+        id, name: v.name || 'Unknown', score: Number(v.score || 0)
+      }));
+      arr.sort((a,b) => b.score - a.score);
+      tbody.innerHTML = '';
+      if (arr.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#888;">No players yet.</td></tr>';
+        return;
+      }
+      arr.forEach((p,i) => {
+        const tr = document.createElement('tr');
+        if (p.id === myId) tr.classList.add('highlight');
+        tr.innerHTML = `<td class="rank">${i+1}</td><td>${p.name}</td><td class="score">${p.score}</td>`;
+        tbody.appendChild(tr);
+      });
+    });
+  </script>
+</body>
+</html>
